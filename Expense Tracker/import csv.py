@@ -1,105 +1,99 @@
-import csv
-from datetime import datetime
-from collections import defaultdict
-import matplotlib.pyplot as plt
+# ExpenseTracker/database.py
 
-FILENAME = "expenses.csv"
+import sqlite3
+from datetime import date
 
-# Initialize CSV file
-def initialize_file():
-    try:
-        with open(FILENAME, 'x', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Date", "Category", "Amount", "Note"])
-    except FileExistsError:
-        pass
+DB_NAME = "expense_tracker.db"
 
-# Add a new expense
-def add_expense():
-    date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    category = input("Enter category (e.g. Food, Transport, Utilities): ")
-    amount = input("Enter amount: ")
-    note = input("Optional note: ")
+def get_db_connection():
+    """Establishes and returns a connection to the SQLite database."""
+    conn = sqlite3.connect(DB_NAME)
+    # Return rows as dictionaries for easier access by column name
+    conn.row_factory = sqlite3.Row
+    return conn
 
-    with open(FILENAME, 'a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([date, category, amount, note])
-    print("✅ Expense added!")
+def init_db():
+    """
+    Initializes the database and creates the 'expenses' table if it doesn't exist.
+    This is safe to run every time the application starts.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            expense_date DATE NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL,
+            note TEXT
+        );
+    """)
+    conn.commit()
+    conn.close()
+    print("Database initialized successfully.")
 
-# View all expenses
-def view_expenses():
-    try:
-        with open(FILENAME, 'r') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                print(" | ".join(row))
-    except FileNotFoundError:
-        print("No expenses found yet.")
+def add_expense(expense_date: date, category: str, amount: float, note: str):
+    """Adds a new expense record to the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO expenses (expense_date, category, amount, note) VALUES (?, ?, ?, ?)",
+        (expense_date, category, amount, note)
+    )
+    conn.commit()
+    conn.close()
 
-# View monthly summary
-def view_summary():
-    summary = defaultdict(float)
-    try:
-        with open(FILENAME, 'r') as file:
-            reader = csv.reader(file)
-            next(reader)  # skip header
-            for row in reader:
-                if len(row) < 3:
-                    continue
-                category = row[1]
-                try:
-                    amount = float(row[2])
-                    summary[category] += amount
-                except ValueError:
-                    continue
+def get_expenses(year: int = None, month: int = None):
+    """
+    Retrieves expenses from the database.
+    Can be filtered by year and month.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    query = "SELECT id, expense_date, category, amount, note FROM expenses"
+    params = []
+    
+    if year and month:
+        query += " WHERE strftime('%Y-%m', expense_date) = ?"
+        params.append(f"{year:04d}-{month:02d}")
+    elif year:
+        query += " WHERE strftime('%Y', expense_date) = ?"
+        params.append(str(year))
 
-        print("\n--- Monthly Summary by Category ---")
-        for cat, total in summary.items():
-            print(f"{cat}: ₹{total:.2f}")
+    query += " ORDER BY expense_date DESC"
+    
+    cursor.execute(query, params)
+    expenses = cursor.fetchall()
+    conn.close()
+    return expenses
 
-        show_chart(summary)
+def delete_expense(expense_id: int):
+    """Deletes an expense record by its ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+    conn.commit()
+    # Check if a row was actually deleted
+    changes = conn.total_changes
+    conn.close()
+    return changes > 0
 
-    except FileNotFoundError:
-        print("No expenses found yet.")
-
-# Show bar chart
-def show_chart(summary):
-    categories = list(summary.keys())
-    amounts = list(summary.values())
-
-    plt.figure(figsize=(8, 6))
-    plt.bar(categories, amounts, color='skyblue')
-    plt.title('Expense Summary by Category')
-    plt.xlabel('Category')
-    plt.ylabel('Total Amount (₹)')
-    plt.xticks(rotation=30)
-    plt.tight_layout()
-    plt.show()
-
-# Main menu
-def main():
-    initialize_file()
-    while True:
-        print("\n--- Personal Expense Tracker ---")
-        print("1. Add Expense")
-        print("2. View Expenses")
-        print("3. View Monthly Summary")
-        print("4. Exit")
-        choice = input("Choose an option: ")
-
-        if choice == '1':
-            add_expense()
-        elif choice == '2':
-            view_expenses()
-        elif choice == '3':
-            view_summary()
-        elif choice == '4':
-            print("Exiting tracker. Goodbye!")
-            break
-        else:
-            print("Invalid option. Please try again.")
-
-if __name__ == "__main__":
-    main()
-#!/usr/bin/env python3
-# This script is a simple personal expense tracker that allows users to add expenses,
+def get_summary_by_category(year: int, month: int):
+    """
+    Retrieves a summary of expenses grouped by category for a specific month and year.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = """
+        SELECT category, SUM(amount) as total
+        FROM expenses
+        WHERE strftime('%Y-%m', expense_date) = ?
+        GROUP BY category
+        ORDER BY total DESC
+    """
+    params = (f"{year:04d}-{month:02d}",)
+    cursor.execute(query, params)
+    summary = cursor.fetchall()
+    conn.close()
+    return summary
