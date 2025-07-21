@@ -1,0 +1,17 @@
+Professional Expense Tracker
+A robust, command-line personal expense tracking application built with Python and SQLite. This tool allows users to efficiently manage their finances by recording, viewing, and analyzing their expenses through a simple and intuitive interface.
+
+Features
+Database-Driven: Utilizes SQLite for persistent, reliable, and efficient data storage, moving beyond simple file-based systems.
+
+CRUD Functionality: Full Create, Read, Update (via delete/re-add), and Delete operations for expenses.
+
+Categorical Analysis: Group expenses by category to understand spending habits.
+
+Monthly Summaries: Generate detailed summaries of expenses for any given month and year.
+
+Data Visualization: Create clear and informative bar charts for monthly summaries using matplotlib for a visual overview of spending.
+
+Professional Structure: The codebase is modularized into separate files for database operations, application logic, and visualization, following best practices for maintainability and scalability.
+
+User-Friendly CLI: A clean and interactive command-line interface built with the tabulate library for well-formatted tables.
